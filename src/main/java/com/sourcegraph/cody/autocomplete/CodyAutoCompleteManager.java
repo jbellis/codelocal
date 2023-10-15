@@ -130,9 +130,7 @@ public class CodyAutoCompleteManager {
     }
   }
 
-  /**
-   * Asynchronously triggers auto-complete for the given editor and offset.
-   */
+  /** Asynchronously triggers auto-complete for the given editor and offset. */
   private CompletableFuture<Void> triggerAutoCompleteAsync(
       @NotNull Editor editor,
       int offset,
