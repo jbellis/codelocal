@@ -115,6 +115,7 @@ public class CodyAutoCompleteItemProvider extends InlineAutoCompleteItemProvider
         getCurrentDocContext(
             document, position, tokToChar(maxPrefixTokens), tokToChar(maxSuffixTokens));
     if (docContext == null) {
+      logger.info("Skipping autocomplete at start of file");
       return emptyResult();
     }
 
@@ -151,6 +152,7 @@ public class CodyAutoCompleteItemProvider extends InlineAutoCompleteItemProvider
     List<AutoCompleteProvider> completers = new ArrayList<>();
 
     if (context.selectedAutoCompleteSuggestionInfo != null) {
+      logger.info("Skipping autocomplete when a suggestion is selected");
       return emptyResult();
     }
 
@@ -167,9 +169,6 @@ public class CodyAutoCompleteItemProvider extends InlineAutoCompleteItemProvider
               "",
               2,
               document));
-    } else if (context.triggerKind == InlineAutoCompleteTriggerKind.Invoke
-        || precedingLine.endsWith(".")) {
-      return emptyResult();
     } else {
       //      waitMs = 1000;
       completers.add(
@@ -204,6 +203,7 @@ public class CodyAutoCompleteItemProvider extends InlineAutoCompleteItemProvider
     //    }
 
     if (abortController.isCancelled()) {
+      logger.info("... cancelled");
       return emptyResult();
     }
     List<CompletableFuture<List<Completion>>> promises =
