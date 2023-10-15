@@ -71,8 +71,7 @@ public class CodyAutoCompleteManager {
 
   @RequiresEdt
   public boolean isEnabledForEditor(Editor editor) {
-    return ConfigUtil.isCodyAutoCompleteEnabled()
-        && editor != null
+    return editor != null
         && isProjectAvailable(editor.getProject())
         && isEditorSupported(editor);
   }
