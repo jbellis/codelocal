@@ -1,5 +1,6 @@
 package com.sourcegraph.cody.autocomplete;
 
+import com.intellij.codeInsight.lookup.LookupManager;
 import com.intellij.injected.editor.EditorWindow;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -82,19 +83,22 @@ public class CodyAutoCompleteManager {
    * @param editor The editor instance to provide autocomplete for.
    * @param offset The character offset in the editor to trigger auto-complete at.
    */
-  public void triggerAutoComplete(@NotNull Editor editor, int offset) {
-    // Check if auto-complete is enabled via the config
-    if (!ConfigUtil.isCodyAutoCompleteEnabled()) {
+  public void triggerAutoComplete(
+      @NotNull Editor editor, int offset, InlineCompletionTriggerKind triggerKind) {
+    if (!isEnabledForEditor(editor)) {
+      if (triggerKind.equals(InlineCompletionTriggerKind.INVOKE)) {
+        logger.warn("triggered autocomplete with invalid editor " + editor);
+      }
       return;
     }
 
-    // Save autocompletion
-    currentAutocompleteTelemetry = AutocompleteTelemetry.createAndMarkTriggered();
-
-    Project project = editor.getProject();
-    if (project != null) {
-      GraphQlLogger.logCodyEvent(project, "completion", "started");
+    final Project project = editor.getProject();
+    if (project == null) {
+      logger.warn("triggered autocomplete with null project");
+      return;
     }
+    currentAutocompleteTelemetry = AutocompleteTelemetry.createAndMarkTriggered();
+    GraphQlLogger.logCodyEvent(project, "completion", "started");
 
     CancellationToken token = new CancellationToken();
     SourcegraphNodeCompletionsClient client =
@@ -118,11 +122,19 @@ public class CodyAutoCompleteManager {
 
     // If the context has a valid completion trigger, cancel any running job
     // and asynchronously trigger the auto-complete
-    if (autoCompleteDocumentContext.isCompletionTriggerValid()) {
+    if (triggerKind.equals(InlineCompletionTriggerKind.INVOKE)
+        || autoCompleteDocumentContext.isCompletionTriggerValid()) { // TODO: skip this condition
       Callable<CompletableFuture<Void>> callable =
           () ->
               triggerAutoCompleteAsync(
-                  editor, offset, token, provider, textDocument, autoCompleteDocumentContext);
+                  project,
+                  editor,
+                  offset,
+                  token,
+                  provider,
+                  textDocument,
+                  autoCompleteDocumentContext,
+                  triggerKind);
       // debouncing the autocomplete trigger
       cancelCurrentJob();
       this.currentJob.set(
@@ -132,12 +144,14 @@ public class CodyAutoCompleteManager {
 
   /** Asynchronously triggers auto-complete for the given editor and offset. */
   private CompletableFuture<Void> triggerAutoCompleteAsync(
+      Project project,
       @NotNull Editor editor,
       int offset,
       @NotNull CancellationToken token,
       @NotNull CodyAutoCompleteItemProvider provider,
       @NotNull TextDocument textDocument,
-      @NotNull AutoCompleteDocumentContext autoCompleteDocumentContext) {
+      @NotNull AutoCompleteDocumentContext autoCompleteDocumentContext,
+      InlineCompletionTriggerKind triggerKind) {
     return provider
         .provideInlineAutoCompleteItems(
             textDocument,
@@ -147,9 +161,19 @@ public class CodyAutoCompleteManager {
         .thenAccept(
             result -> {
               if (Thread.interrupted()) {
+                if (triggerKind.equals(InlineCompletionTriggerKind.INVOKE)) {
+                  logger.warn("canceled autocomplete due to thread interruption");
+                }
                 return;
               }
               if (result.items.isEmpty()) {
+                if (triggerKind.equals(InlineCompletionTriggerKind.INVOKE)) {
+                  logger.warn("explicit autocomplete returned empty suggestions");
+                  // NOTE(olafur): it would be nice to give the user a visual hint when this
+                  // happens.
+                  // We don't do anything now because it's unclear what would be the most idiomatic
+                  // IntelliJ API to use.
+                }
                 return;
               }
               InlayModel inlayModel = editor.getInlayModel();
@@ -175,33 +199,49 @@ public class CodyAutoCompleteManager {
                             currentAutocompleteTelemetry.markCompletionDisplayed();
                           }
 
-                          /* Display autocomplete */
-                          AutoCompleteText autoCompleteText =
-                              item.toAutoCompleteText(
-                                  autoCompleteDocumentContext.getSameLineSuffix().trim());
-                          autoCompleteText
-                              .getInlineRenderer(editor)
-                              .ifPresent(
-                                  inlineRenderer ->
-                                      inlayModel.addInlineElement(offset, true, inlineRenderer));
-                          autoCompleteText
-                              .getAfterLineEndRenderer(editor)
-                              .ifPresent(
-                                  afterLineEndRenderer ->
-                                      inlayModel.addAfterLineEndElement(
-                                          offset, true, afterLineEndRenderer));
-                          autoCompleteText
-                              .getBlockRenderer(editor)
-                              .ifPresent(
-                                  blockRenderer ->
-                                      inlayModel.addBlockElement(
-                                          offset, true, false, Integer.MAX_VALUE, blockRenderer));
+                          // Avoid displaying autocomplete when IntelliJ is already displaying
+                          // built-in completions. When built-in completions are visible, we can't
+                          // accept the Cody autocomplete with TAB because it accepts the built-in
+                          // completion.
+                          if (LookupManager.getInstance(project).getActiveLookup() != null) {
+                            if (triggerKind.equals(InlineCompletionTriggerKind.INVOKE)) {
+                              logger.warn(
+                                  "Skipping autocomplete because lookup is active: " + item);
+                            }
+                            return;
+                          }
+
+                          displayAutocomplete(
+                              editor, offset, autoCompleteDocumentContext, item, inlayModel);
                         });
               } catch (Exception e) {
                 // TODO: do something smarter with unexpected errors.
                 logger.warn(e);
               }
             });
+  }
+
+  private static void displayAutocomplete(
+      @NotNull Editor editor,
+      int offset,
+      @NotNull AutoCompleteDocumentContext autoCompleteDocumentContext,
+      InlineAutoCompleteItem item,
+      InlayModel inlayModel) {
+    AutoCompleteText autoCompleteText =
+        item.toAutoCompleteText(autoCompleteDocumentContext.getSameLineSuffix().trim());
+    autoCompleteText
+        .getInlineRenderer(editor)
+        .ifPresent(inlineRenderer -> inlayModel.addInlineElement(offset, true, inlineRenderer));
+    autoCompleteText
+        .getAfterLineEndRenderer(editor)
+        .ifPresent(
+            afterLineEndRenderer ->
+                inlayModel.addAfterLineEndElement(offset, true, afterLineEndRenderer));
+    autoCompleteText
+        .getBlockRenderer(editor)
+        .ifPresent(
+            blockRenderer ->
+                inlayModel.addBlockElement(offset, true, false, Integer.MAX_VALUE, blockRenderer));
   }
 
   // TODO: handle tabs in multiline autocomplete suggestions when we add them
@@ -254,7 +294,8 @@ public class CodyAutoCompleteManager {
   }
 
   public static boolean isEditorInstanceSupported(@NotNull Editor editor) {
-    return !editor.isViewer()
+    return editor.getProject() != null
+        && !editor.isViewer()
         && !editor.isOneLineMode()
         && !(editor instanceof EditorWindow)
         && !(editor instanceof ImaginaryEditor)
