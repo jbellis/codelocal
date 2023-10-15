@@ -101,7 +101,7 @@ public class CodyAutoCompleteManager {
 
     CancellationToken token = new CancellationToken();
     SourcegraphNodeCompletionsClient client =
-        new SourcegraphNodeCompletionsClient(autoCompleteService(editor), token);
+        new SourcegraphNodeCompletionsClient(token);
     CodyAutoCompleteItemProvider provider =
         new CodyAutoCompleteItemProvider(
             new WebviewErrorMessenger(),

@@ -19,6 +19,7 @@ version = properties("pluginVersion")
 
 repositories {
     mavenCentral()
+    mavenLocal()
 }
 
 intellij {
@@ -36,6 +37,8 @@ dependencies {
     implementation("org.commonmark:commonmark:0.21.0")
     implementation("org.commonmark:commonmark-ext-gfm-tables:0.21.0")
     implementation("org.eclipse.lsp4j:org.eclipse.lsp4j.jsonrpc:0.21.0")
+    implementation("com.github.tjake:jlama-core:0.1.0-SNAPSHOT")
+
     testImplementation(platform("org.junit:junit-bom:5.7.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.24.2")
@@ -52,10 +55,7 @@ spotless {
 
 java {
     toolchain {
-        // Always compile the codebase with Java 11 regardless of what Java
-        // version is installed on the computer. Gradle will download Java 11
-        // even if you already have it installed on your computer.
-        languageVersion.set(JavaLanguageVersion.of(11))
+        languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
 

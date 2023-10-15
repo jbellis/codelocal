@@ -97,19 +97,6 @@ public class CodyAutoCompleteItemProvider extends InlineAutoCompleteItemProvider
     token.onCancellationRequested(abortController::abort);
     this.abortOpenInlineCompletions = abortController::abort;
 
-    if (true) {
-      // Create an InlineAutoCompleteItem object with "Hello, world"
-      InlineAutoCompleteItem helloWorldItem =
-          new InlineAutoCompleteItem(
-              "Hello, world",
-              null, // ignored?
-              new Range(new Position(0, 0), new Position(0, "Hello, world".length())),
-              null);
-
-      InlineAutoCompleteList helloWorldList = new InlineAutoCompleteList(List.of(helloWorldItem));
-      return CompletableFuture.completedFuture(helloWorldList);
-    }
-
     // Get the current document context around the position
     DocContext docContext =
         getCurrentDocContext(
