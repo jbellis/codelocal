@@ -39,8 +39,7 @@ public class SourcegraphNodeCompletionsClient {
           try {
             model = AbstractModel.load(
                     new File("/home/jonathan/Projects/Jlama/models/CodeLlama-7b-hf"),
-                    24, DType.F32, DType.I8
-            );
+                    24, DType.F32, DType.I8);
           } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
           } finally {
