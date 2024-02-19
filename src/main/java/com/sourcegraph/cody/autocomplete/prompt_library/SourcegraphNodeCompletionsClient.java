@@ -37,11 +37,10 @@ public class SourcegraphNodeCompletionsClient {
       if (modelLoading.compareAndSet(false, true)) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
           try {
-            model = AbstractModel.load(
-                    new File("/home/jonathan/Projects/Jlama/models/CodeLlama-7b-hf"),
-                    24, DType.F32, DType.I8);
-          } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
+            model = null;
+//            model = AbstractModel.load(
+//                    new File("/home/jonathan/Projects/Jlama/models/CodeLlama-7b-hf"),
+//                    24, DType.F32, DType.I8);
           } finally {
             modelLoading.set(false); // Reset loading flag
           }
@@ -68,14 +67,14 @@ public class SourcegraphNodeCompletionsClient {
     StringBuilder buffer = new StringBuilder();
     var fullPrompt = params.messages.stream().map(Message::prompt).collect(Collectors.joining("\n"));
     logger.info("Full prompt is " + fullPrompt);
-    model.generate(fullPrompt, 0.2f, params.maxTokensToSample, true, (token, time) -> {
-      buffer.append(token);
-
-      if (token.equals("\n")) {
-        cc.onData(buffer.toString());
-        buffer.setLength(0);
-      }
-    });
+//    model.generate(fullPrompt, 0.2f, params.maxTokensToSample, true, (token, time) -> {
+//      buffer.append(token);
+//
+//      if (token.equals("\n")) {
+//        cc.onData(buffer.toString());
+//        buffer.setLength(0);
+//      }
+//    });
 
     cc.onData(buffer.toString());
     cc.onComplete();

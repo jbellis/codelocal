@@ -39,12 +39,9 @@ public class JlamaAutoCompleteProvider extends AutoCompleteProvider {
       int defaultN)
   {
     super(completionsClient, promptChars, responseTokens, snippets, prefix, suffix, injectPrefix, defaultN);
-    try {
-      model = AbstractModel.load(new File("/home/jonathan/Projects/Jlama/models/CodeLlama-7b-hf"),
-                                 24, DType.F32, DType.I8);
-    } catch (FileNotFoundException e) {
-      throw new RuntimeException(e);
-    }
+      model = null;
+//      model = AbstractModel.load(new File("/home/jonathan/Projects/Jlama/models/CodeLlama-7b-hf"),
+//                                 24, DType.F32, DType.I8);
   }
 
   @Override
