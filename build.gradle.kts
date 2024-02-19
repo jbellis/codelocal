@@ -37,6 +37,9 @@ dependencies {
     implementation("org.commonmark:commonmark:0.21.0")
     implementation("org.commonmark:commonmark-ext-gfm-tables:0.21.0")
     implementation("org.eclipse.lsp4j:org.eclipse.lsp4j.jsonrpc:0.21.0")
+    implementation("com.theokanning.openai-gpt3-java:service:0.18.2")
+    implementation("io.github.jbellis:jvector:3.0.0-alpha.5")
+    implementation("org.mapdb:mapdb:3.1.0")
     implementation("org.apache.commons:commons-lang3:3.12.0")
     implementation("com.github.tjake:jlama-core:0.1.0-SNAPSHOT")
 
