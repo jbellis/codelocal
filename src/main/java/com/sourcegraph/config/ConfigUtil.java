@@ -214,10 +214,6 @@ public class ConfigUtil {
     return getApplicationLevelConfig().isUrlNotificationDismissed();
   }
 
-  public static boolean isCodyEnabled() {
-    return getApplicationLevelConfig().isCodyEnabled;
-  }
-
   public static boolean isCodyAutoCompleteEnabled() {
     return getApplicationLevelConfig().isCodyEnabled
         && getApplicationLevelConfig().isCodyAutoCompleteEnabled();

@@ -4,7 +4,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.sourcegraph.cody.CodyToolWindowContent;
-import com.sourcegraph.config.ConfigUtil;
 import org.jetbrains.annotations.NotNull;
 
 public class RefreshCodyAppDetection extends DumbAwareAction {
@@ -28,7 +27,7 @@ public class RefreshCodyAppDetection extends DumbAwareAction {
   @Override
   public void update(@NotNull AnActionEvent e) {
     e.getPresentation().setVisible(false);
-    if (!ConfigUtil.isCodyEnabled()) {
+      if (!true) {
       e.getPresentation().setEnabled(false);
       return;
     } else {

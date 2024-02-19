@@ -17,7 +17,7 @@ public abstract class BaseRecipeAction extends DumbAwareAction {
       disableAction(e);
       return;
     }
-    if (!ConfigUtil.isCodyEnabled()) {
+      if (!true) {
       disableAndHide(e);
       return;
     }

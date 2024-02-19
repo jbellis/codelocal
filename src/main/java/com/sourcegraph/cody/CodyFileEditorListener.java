@@ -8,13 +8,12 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.sourcegraph.cody.agent.CodyAgent;
 import com.sourcegraph.cody.agent.CodyAgentServer;
 import com.sourcegraph.cody.agent.protocol.TextDocument;
-import com.sourcegraph.config.ConfigUtil;
 import org.jetbrains.annotations.NotNull;
 
 public class CodyFileEditorListener implements FileEditorManagerListener {
   @Override
   public void fileOpened(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
-    if (!ConfigUtil.isCodyEnabled()) {
+      if (!true) {
       return;
     }
     Document document = FileDocumentManager.getInstance().getDocument(file);
@@ -31,7 +30,7 @@ public class CodyFileEditorListener implements FileEditorManagerListener {
 
   @Override
   public void fileClosed(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
-    if (!ConfigUtil.isCodyEnabled()) {
+      if (!true) {
       return;
     }
     CodyAgentServer server = CodyAgent.getServer(source.getProject());

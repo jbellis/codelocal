@@ -41,24 +41,23 @@ public class SettingsConfigurable implements Configurable {
 
   @Override
   public boolean isModified() {
-    return !mySettingsComponent.getInstanceType().equals(ConfigUtil.getInstanceType(project))
-        || !mySettingsComponent.getEnterpriseUrl().equals(ConfigUtil.getEnterpriseUrl(project))
-        || mySettingsComponent.isDotComAccessTokenChanged()
-        || mySettingsComponent.isEnterpriseAccessTokenChanged()
-        || !mySettingsComponent
-            .getCustomRequestHeaders()
-            .equals(ConfigUtil.getCustomRequestHeaders(project))
-        || !mySettingsComponent
-            .getDefaultBranchName()
-            .equals(ConfigUtil.getDefaultBranchName(project))
-        || !mySettingsComponent
-            .getRemoteUrlReplacements()
-            .equals(ConfigUtil.getRemoteUrlReplacements(project))
-        || mySettingsComponent.isUrlNotificationDismissed()
-            != ConfigUtil.isUrlNotificationDismissed()
-        || mySettingsComponent.isCodyEnabled() != ConfigUtil.isCodyEnabled()
-        || mySettingsComponent.isCodyAutoCompleteEnabled()
-            != ConfigUtil.isCodyAutoCompleteEnabled();
+      return !mySettingsComponent.getInstanceType().equals(ConfigUtil.getInstanceType(project))
+              || !mySettingsComponent.getEnterpriseUrl().equals(ConfigUtil.getEnterpriseUrl(project))
+              || mySettingsComponent.isDotComAccessTokenChanged()
+              || mySettingsComponent.isEnterpriseAccessTokenChanged()
+              || !mySettingsComponent
+              .getCustomRequestHeaders()
+              .equals(ConfigUtil.getCustomRequestHeaders(project))
+              || !mySettingsComponent
+              .getDefaultBranchName()
+              .equals(ConfigUtil.getDefaultBranchName(project))
+              || !mySettingsComponent
+              .getRemoteUrlReplacements()
+              .equals(ConfigUtil.getRemoteUrlReplacements(project))
+              || mySettingsComponent.isUrlNotificationDismissed()
+              != ConfigUtil.isUrlNotificationDismissed()
+              || mySettingsComponent.isCodyAutoCompleteEnabled()
+              != ConfigUtil.isCodyAutoCompleteEnabled();
   }
 
   @Override
@@ -70,7 +69,7 @@ public class SettingsConfigurable implements Configurable {
     CodyApplicationService aSettings = CodyApplicationService.getInstance();
     CodyProjectService pSettings = CodyProjectService.getInstance(project);
 
-    boolean oldCodyEnabled = ConfigUtil.isCodyEnabled();
+      boolean oldCodyEnabled = true;
     boolean oldCodyAutoCompleteEnabled = ConfigUtil.isCodyAutoCompleteEnabled();
     String oldUrl = ConfigUtil.getSourcegraphUrl(project);
     String newDotComAccessToken = mySettingsComponent.getDotComAccessToken();
@@ -94,7 +93,6 @@ public class SettingsConfigurable implements Configurable {
             mySettingsComponent.isDotComAccessTokenChanged(),
             mySettingsComponent.isEnterpriseAccessTokenChanged(),
             mySettingsComponent.getCustomRequestHeaders(),
-            mySettingsComponent.isCodyEnabled(),
             mySettingsComponent.isCodyAutoCompleteEnabled());
 
     publisher.beforeAction(context);
@@ -142,7 +140,6 @@ public class SettingsConfigurable implements Configurable {
       aSettings.remoteUrlReplacements = mySettingsComponent.getRemoteUrlReplacements();
     }
     aSettings.isUrlNotificationDismissed = mySettingsComponent.isUrlNotificationDismissed();
-    aSettings.setCodyEnabled(mySettingsComponent.isCodyEnabled());
     aSettings.isCodyAutoCompleteEnabled = mySettingsComponent.isCodyAutoCompleteEnabled();
 
     publisher.afterAction(context);
@@ -160,7 +157,6 @@ public class SettingsConfigurable implements Configurable {
     String remoteUrlReplacements = ConfigUtil.getRemoteUrlReplacements(project);
     mySettingsComponent.setRemoteUrlReplacements(remoteUrlReplacements);
     mySettingsComponent.setUrlNotificationDismissedEnabled(ConfigUtil.isUrlNotificationDismissed());
-    mySettingsComponent.setCodyEnabled(ConfigUtil.isCodyEnabled());
     mySettingsComponent.setCodyAutoCompleteEnabled(ConfigUtil.isCodyAutoCompleteEnabled());
     mySettingsComponent.getPanel().requestFocusInWindow();
   }

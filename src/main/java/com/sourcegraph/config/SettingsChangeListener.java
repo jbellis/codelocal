@@ -117,25 +117,7 @@ public class SettingsChangeListener implements Disposable {
             }
 
             // Disable/enable the Cody tool window depending on the setting
-            if (!context.newCodyEnabled && context.oldCodyEnabled) {
-              ToolWindowManager toolWindowManager = ToolWindowManager.getInstance(project);
-              ToolWindow toolWindow =
-                  toolWindowManager.getToolWindow(CodyToolWindowFactory.TOOL_WINDOW_ID);
-              if (toolWindow != null) {
-                toolWindow.setAvailable(false, null);
-              }
-            } else if (context.newCodyEnabled && !context.oldCodyEnabled) {
-              ToolWindowManager toolWindowManager = ToolWindowManager.getInstance(project);
-              ToolWindow toolWindow =
-                  toolWindowManager.getToolWindow(CodyToolWindowFactory.TOOL_WINDOW_ID);
-              if (toolWindow != null) {
-                toolWindow.setAvailable(true, null);
-              }
-            }
-            if (context.newCodyEnabled) {
-              // refresh Cody LLM configuration
-              CodyLLMConfiguration.getInstance(project).refreshCache();
-            }
+            CodyLLMConfiguration.getInstance(project).refreshCache();
           }
         });
   }

@@ -10,7 +10,6 @@ import com.intellij.openapi.wm.ToolWindowFactory;
 import com.intellij.openapi.wm.ex.ToolWindowEx;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
-import com.sourcegraph.config.ConfigUtil;
 import com.sourcegraph.config.OpenPluginSettingsAction;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +48,6 @@ public class CodyToolWindowFactory implements ToolWindowFactory, DumbAware {
 
   @Override
   public boolean shouldBeAvailable(@NotNull Project project) {
-    return ConfigUtil.isCodyEnabled();
+      return true;
   }
 }

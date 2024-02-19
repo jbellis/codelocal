@@ -54,7 +54,6 @@ public class SettingsComponent implements Disposable {
   private JBTextField defaultBranchNameTextField;
   private JBTextField remoteUrlReplacementsTextField;
   private JBCheckBox isUrlNotificationDismissedCheckBox;
-  private JBCheckBox isCodyEnabledCheckBox;
   private JBCheckBox isCodyAutoCompleteEnabledCheckBox;
 
   private ActionLink installLocalAppLink;
@@ -434,17 +433,6 @@ public class SettingsComponent implements Disposable {
     isUrlNotificationDismissedCheckBox.setSelected(value);
   }
 
-  public boolean isCodyEnabled() {
-    return isCodyEnabledCheckBox.isSelected();
-  }
-
-  public void setCodyEnabled(boolean value) {
-    isCodyEnabledCheckBox.setSelected(value);
-    if (!value) {
-      setCodyAutoCompleteEnabled(false);
-    }
-  }
-
   public boolean isCodyAutoCompleteEnabled() {
     return isCodyAutoCompleteEnabledCheckBox.isSelected();
   }
@@ -582,27 +570,13 @@ public class SettingsComponent implements Disposable {
 
   @NotNull
   private JPanel createCodySettingsPanel() {
-    //noinspection DialogTitleCapitalization
-    isCodyEnabledCheckBox = new JBCheckBox("Enable Cody");
     isCodyAutoCompleteEnabledCheckBox = new JBCheckBox("Enable Cody autocomplete");
     JPanel codySettingsPanel =
         FormBuilder.createFormBuilder()
-            .addComponent(isCodyEnabledCheckBox, 10)
-            .addTooltip(
-                "Disable this to turn off all AI-based functionality of the plugin, including the Cody chat sidebar and autocomplete")
             .addComponent(isCodyAutoCompleteEnabledCheckBox, 5)
             .getPanel();
     codySettingsPanel.setBorder(
         IdeBorderFactory.createTitledBorder("Cody Settings", true, JBUI.insetsTop(8)));
-
-    // Disable isCodyAutoCompleteEnabledCheckBox if isCodyEnabledCheckBox is not selected
-    isCodyEnabledCheckBox.addActionListener(
-        e -> {
-          if (!isCodyEnabledCheckBox.isSelected()) {
-            isCodyAutoCompleteEnabledCheckBox.setSelected(false);
-          }
-          isCodyAutoCompleteEnabledCheckBox.setEnabled(isCodyEnabledCheckBox.isSelected());
-        });
 
     return codySettingsPanel;
   }
