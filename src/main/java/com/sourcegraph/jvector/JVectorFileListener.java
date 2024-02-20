@@ -206,7 +206,9 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
                     } else if (event instanceof VFileCreateEvent) {
                         debug("%s: fileCreated(%s)", projectName, event.getFile().getPath());
                         updateEmbeddings(event.getFile());
+                        dirty = true;
                     }
+                    db.commit();
                     // we do not have to implement fileCopied, since a fileCreated event is triggered for the new file
                 }
             }
