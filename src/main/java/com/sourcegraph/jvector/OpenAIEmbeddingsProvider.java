@@ -16,7 +16,8 @@ public class OpenAIEmbeddingsProvider implements EmbeddingsProvider {
         // read the key from ~/.config
         String key;
         try {
-            key = Files.readString(Path.of(System.getProperty("user.home"), ".config", "openai", "openai.key"));
+            // TODO use a "real" codelocal config file?
+            key = Files.readString(Path.of(System.getProperty("user.home"), ".config", "openai", "openai.key")).trim();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -25,7 +26,11 @@ public class OpenAIEmbeddingsProvider implements EmbeddingsProvider {
 
     @Override
     public float[] getEmbedding(String body) {
-        var r = service.createEmbeddings(new EmbeddingRequest("text-embedding-3-small", List.of(body), null));
+        var er = EmbeddingRequest.builder()
+                .model("text-embedding-3-small")
+                .input(List.of(body))
+                .build();
+        var r = service.createEmbeddings(er);
         List<Double> embedding = r.getData().get(0).getEmbedding();
         float[] v = new float[embedding.size()];
         for (int i = 0; i < embedding.size(); i++) {

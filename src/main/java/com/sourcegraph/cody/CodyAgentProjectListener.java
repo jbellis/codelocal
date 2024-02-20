@@ -22,6 +22,6 @@ public class CodyAgentProjectListener implements ProjectManagerListener {
     if (service == null) {
       return;
     }
-    service.shutdown();
+    service.dispose();
   }
 }

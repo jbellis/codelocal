@@ -1,5 +1,6 @@
 package com.sourcegraph.jvector;
 
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -7,7 +8,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import org.jetbrains.annotations.NotNull;
 
-public class JVectorFileListenerReference {
+public class JVectorFileListenerReference implements Disposable {
     private volatile JVectorFileListener listener;
 
     public JVectorFileListenerReference() {
@@ -19,12 +20,14 @@ public class JVectorFileListenerReference {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 listener = new JVectorFileListener(project);
-                // TODO add the listener to VFS
+                // TODO not sure if this is an appropriate Disposable
+                VirtualFileManager.getInstance().addAsyncFileListener(listener, JVectorFileListenerReference.this);
             }
         });
     }
 
-    public void shutdown() {
+    @Override
+    public void dispose() {
         if (listener != null) {
             listener.close();
         }
