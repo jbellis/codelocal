@@ -16,7 +16,7 @@ public class OpenAIEmbeddingsProvider implements EmbeddingsProvider {
         // read the key from ~/.config
         String key;
         try {
-            key = Files.readString(Path.of(System.getProperty("user.home"), ".config", "openai.key"));
+            key = Files.readString(Path.of(System.getProperty("user.home"), ".config", "openai", "openai.key"));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

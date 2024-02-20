@@ -1,6 +1,7 @@
 package com.sourcegraph.jvector;
 
 import com.intellij.openapi.application.PathManager;
+import com.intellij.openapi.diagnostic.Attachment;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileEvent;
@@ -12,6 +13,7 @@ import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import org.apache.log4j.Level;
 import org.jetbrains.annotations.NotNull;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
@@ -49,19 +51,20 @@ public class JVectorFileListener implements VirtualFileListener, AutoCloseable {
 
     public JVectorFileListener(Project project) {
         projectName = project.getName();
-        log.debug("JVectorFileListener create for {}", projectName);
+        debug("%s: create", projectName);
 
         vectors = new ArrayList<>();
         ravv = new ListRandomAccessVectorValues(vectors, 1536);
         builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.DOT_PRODUCT, 16, 100, 1.2f, 1.2f);
         embeddingsProvider = new OpenAIEmbeddingsProvider();
 
-        var cachePath = PathManager.getSystemPath() + File.pathSeparator + "jvector" + File.pathSeparator + projectName;
-        var mapDBPath = cachePath + File.pathSeparator + "map.db";
+        var cachePath = PathManager.getSystemPath() + File.separator + "jvector" + File.separator + projectName;
+        var mapDBPath = cachePath + File.separator + "map.db";
         db = DBMaker.fileDB(mapDBPath).fileMmapEnable().make();
         chunksByOrdinal = db.hashMap("chunksByOrdinal", Serializer.INTEGER, Serializer.STRING).createOrOpen();
         ordinalsByFile = db.hashMap("ordinalsByFile", Serializer.STRING, Serializer.INT_ARRAY).createOrOpen();
-        graphIndexPath = cachePath + File.pathSeparator + "jvector.db";
+        graphIndexPath = cachePath + File.separator + "jvector.db";
+        debug("mapDBPath=%s, graphIndexPath=", mapDBPath, graphIndexPath);
         if (Files.exists(new File(graphIndexPath).toPath())) {
             try {
                 builder.load(new SimpleMappedReader(graphIndexPath));
@@ -73,12 +76,17 @@ public class JVectorFileListener implements VirtualFileListener, AutoCloseable {
         scheduler.schedule(this::save, 1, java.util.concurrent.TimeUnit.MINUTES);
     }
 
+    private static void debug(String format, Object... args) {
+        var message = String.format(format, args);
+        log.warn(message);
+    }
+
     public void save() {
         if (!dirty) {
             return;
         }
 
-        log.debug("JVectorFileListener save() for {}", projectName);
+        debug("%s: save()", projectName);
         builder.cleanup();
         var g = builder.getGraph();
         try {
@@ -120,6 +128,7 @@ public class JVectorFileListener implements VirtualFileListener, AutoCloseable {
 
     @Override
     public void contentsChanged(@NotNull VirtualFileEvent event) {
+        debug("%s: contentsChanged(%s)", projectName, event.getFile().getPath());
         removeEmbeddings(event.getFile());
         updateEmbeddings(event.getFile());
         dirty = true;
@@ -141,14 +150,14 @@ public class JVectorFileListener implements VirtualFileListener, AutoCloseable {
 
     @Override
     public void fileCreated(@NotNull VirtualFileEvent event) {
-        log.debug("JVectorFileListener fileCreated({}) for {}", event.getFile().getPath(), projectName);
+        debug("%s: fileCreated(%s)", projectName, event.getFile().getPath());
         updateEmbeddings(event.getFile());
         dirty = true;
     }
 
     @Override
     public void fileDeleted(@NotNull VirtualFileEvent event) {
-        log.debug("JVectorFileListener fileDeleted({}) for {}", event.getFile().getPath(), projectName);
+        debug("%s: fileDeleted(%s)", projectName, event.getFile().getPath());
         removeEmbeddings(event.getFile());
         dirty = true;
     }
@@ -161,10 +170,10 @@ public class JVectorFileListener implements VirtualFileListener, AutoCloseable {
 
     @Override
     public void fileMoved(@NotNull VirtualFileMoveEvent event) {
-        log.debug("JVectorFileListener fileDeleted({} -> {}) for {}",
-                  event.getOldParent().getPath(),
-                  event.getNewParent().getPath(),
-                  projectName);
+        debug("%s: fileDeleted(%s -> %s)",
+              projectName,
+              event.getOldParent().getPath(),
+              event.getNewParent().getPath());
         // we don't have to update the graph index, just the ordinalsByFile map
         for (var entry : ordinalsByFile.entrySet()) {
             if (!entry.getKey().equals(event.getOldParent().getPath())) {
@@ -182,7 +191,7 @@ public class JVectorFileListener implements VirtualFileListener, AutoCloseable {
 
     @Override
     public void close() {
-        log.debug("JVectorFileListener close() for {}", projectName);
+        debug("%s: close()", projectName);
         save();
         db.close();
         scheduler.shutdown();

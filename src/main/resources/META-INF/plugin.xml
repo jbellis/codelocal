@@ -43,7 +43,7 @@
             anchor="left"
             secondary="false"
             factoryClass="com.sourcegraph.cody.CodyToolWindowFactory"/>
-        <projectService serviceImplementation="com.sourcegraph.cody.agent.CodyAgent"/>
+        <projectService serviceImplementation="com.sourcegraph.jvector.JVectorFileListenerReference"/>
         <projectService serviceImplementation="com.sourcegraph.cody.api.CodyLLMConfiguration"/>
 
 
