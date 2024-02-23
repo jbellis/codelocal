@@ -22,6 +22,7 @@ public class JVectorFileListenerReference implements Disposable {
                 listener = new JVectorFileListener(project);
                 // TODO not sure if this is an appropriate Disposable
                 VirtualFileManager.getInstance().addAsyncFileListener(listener, JVectorFileListenerReference.this);
+                listener.scanExistingFiles();
             }
         });
     }

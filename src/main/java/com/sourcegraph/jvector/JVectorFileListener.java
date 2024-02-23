@@ -3,10 +3,11 @@ package com.sourcegraph.jvector;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.vfs.AsyncFileListener;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileVisitor;
 import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent;
@@ -18,21 +19,26 @@ import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
 import org.mapdb.Serializer;
 
 import java.io.DataOutput;
 import java.io.DataOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * An asynchronous file listener that reacts to file changes within a project, maintaining and updating an
@@ -43,44 +49,49 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-    private final String projectName;
+    private final Project project;
 
     private final DB db;
     private final Map<Integer, String> chunksByOrdinal;
     private final Map<String, int[]> ordinalsByFile;
+    private final Map<String, byte[]> fileContentHashes;
 
     private final GraphIndexBuilder<float[]> builder;
     private final Path graphIndexPath;
     private final ArrayList<float[]> vectors;
     private final ListRandomAccessVectorValues ravv;
     private final EmbeddingsProvider embeddingsProvider;
-    private final @NotNull ProjectFileIndex projectIndex;
     private boolean dirty;
 
     public JVectorFileListener(Project project) {
-        projectName = project.getName();
-        projectIndex = ProjectRootManager.getInstance(project).getFileIndex();
-        debug("%s: create", projectName);
+        this.project = project;
+        debug("%s: create", project.getName());
 
         vectors = new ArrayList<>();
         ravv = new ListRandomAccessVectorValues(vectors, 1536);
         builder = new GraphIndexBuilder<>(ravv, VectorEncoding.FLOAT32, VectorSimilarityFunction.DOT_PRODUCT, 16, 100, 1.2f, 1.2f);
         embeddingsProvider = new OpenAIEmbeddingsProvider();
 
-        var cachePath = Path.of(PathManager.getSystemPath(), "codelocal", projectName);
+        // create a cache directory for the project
+        var cachePath = Path.of(PathManager.getSystemPath(), "codelocal", project.getName());
         try {
             Files.createDirectories(cachePath);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
 
+        // mapdb and graph index both live in the cache directory
         var mapDBPath = cachePath.resolve("map.db");
-        db = DBMaker.fileDB(mapDBPath.toFile()).fileMmapEnable().make();
-
-        chunksByOrdinal = db.hashMap("chunksByOrdinal", Serializer.INTEGER, Serializer.STRING).createOrOpen();
-        ordinalsByFile = db.hashMap("ordinalsByFile", Serializer.STRING, Serializer.INT_ARRAY).createOrOpen();
         graphIndexPath = cachePath.resolve("jvector.db");
         debug("mapDBPath=%s, graphIndexPath=%s", mapDBPath, graphIndexPath);
+
+        // create mapdb maps
+        db = DBMaker.fileDB(mapDBPath.toFile()).fileMmapEnable().make();
+        chunksByOrdinal = db.hashMap("chunksByOrdinal", Serializer.INTEGER, Serializer.STRING).createOrOpen();
+        ordinalsByFile = db.hashMap("ordinalsByFile", Serializer.STRING, Serializer.INT_ARRAY).createOrOpen();
+        fileContentHashes = db.hashMap("fileContentHashes", Serializer.STRING, Serializer.BYTE_ARRAY).createOrOpen();
+
+        // load graph index
         if (Files.exists(graphIndexPath)) {
             try {
                 builder.load(new SimpleMappedReader(graphIndexPath));
@@ -90,6 +101,74 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
         }
 
         scheduler.schedule(this::save, 1, java.util.concurrent.TimeUnit.MINUTES);
+    }
+
+    /**
+     * Scans existing files in the project.
+     */
+    public void scanExistingFiles() {
+        var visited = new AtomicInteger();
+        var updated = new AtomicInteger();
+        for (var root : ProjectRootManager.getInstance(project).getContentRoots()) {
+            VfsUtil.visitChildrenRecursively(root, new VirtualFileVisitor<Void>() {
+                @Override
+                public boolean visitFile(@NotNull VirtualFile file) {
+                    visited.incrementAndGet();
+                    if (file.isDirectory()) {
+                        return true;
+                    }
+
+                    if (shouldIndex(file)) {
+                        if (maybeUpdateFile(file)) {
+                            updated.incrementAndGet();
+                        }
+                    }
+                    return false;
+                }
+            });
+        }
+        debug("%s: scanExistingFiles: visited=%d, updated=%d", projectName(), visited.get(), updated.get());
+    }
+
+    /**
+     * Handles a single file during the scan. This method should include the logic
+     * for processing each file (e.g., indexing content, checking file type).
+     *
+     * @param file the file to handle
+     */
+    private boolean maybeUpdateFile(VirtualFile file) {
+        var hash = getHash(file);
+        var oldHash = fileContentHashes.get(file.getPath());
+        if (oldHash != null && MessageDigest.isEqual(hash, oldHash)) {
+            return false;
+        }
+
+        removeEmbeddings(file);
+        createEmbeddings(file);
+        fileContentHashes.put(file.getPath(), hash);
+        return true;
+    }
+
+    private static byte[] getHash(VirtualFile file) {
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+        try (var fis = new FileInputStream(file.getPath())) {
+            byte[] byteArray = new byte[1024];
+            // Read the file data and update in digest
+            int bytesCount;
+            while ((bytesCount = fis.read(byteArray)) != -1) {
+                digest.update(byteArray, 0, bytesCount);
+            };
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        // Get the hash's bytes
+        return digest.digest();
     }
 
     /**
@@ -105,7 +184,7 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
             return;
         }
 
-        debug("%s: save()", projectName);
+        debug("%s: save()", projectName());
         builder.cleanup();
         var g = builder.getGraph();
         try {
@@ -145,7 +224,7 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
         return List.of("TODO");
     }
 
-    private void updateEmbeddings(@NotNull VirtualFile file) {
+    private void createEmbeddings(@NotNull VirtualFile file) {
         var chunks = computeEmbeddings(file);
         var ordinals = new int[chunks.size()];
         // add each chunk to the index
@@ -177,26 +256,27 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
      */
     @Override
     public ChangeApplier prepareChange(@NotNull List<? extends @NotNull VFileEvent> list) {
+        var projectIndex = ProjectRootManager.getInstance(project).getFileIndex();
         return new ChangeApplier() {
             @Override
             public void afterVfsChange() {
                 for (var event: list) {
                     if (event.getFile() == null
-                        || !event.getFile().getPath().endsWith(".java") // TODO support non-Java code
+                        || !shouldIndex(event.getFile()) // TODO support non-Java code
                         || !projectIndex.isInContent(event.getFile()))
                     {
                         continue;
                     }
 
                     if (event instanceof VFileContentChangeEvent) {
-                        debug("%s: contentsChanged(%s)", projectName, event.getFile().getPath());
-                        removeEmbeddings(event.getFile());
-                        updateEmbeddings(event.getFile());
-                        dirty = true;
+                        debug("%s: contentsChanged(%s)", projectName(), event.getFile().getPath());
+                        if (maybeUpdateFile(event.getFile())) {
+                            dirty = true;
+                        }
                     } else if (event instanceof VFileMoveEvent) {
                         var me = (VFileMoveEvent) event;
                         debug("%s: fileDeleted(%s -> %s)",
-                              projectName,
+                              projectName(),
                               me.getOldParent().getPath(),
                               me.getNewParent().getPath());
                         // we don't have to update the graph index, just the ordinalsByFile map
@@ -211,12 +291,12 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
                         }
                         dirty = true;
                     } else if (event instanceof VFileDeleteEvent) {
-                        debug("%s: fileDeleted(%s)", projectName, event.getFile().getPath());
+                        debug("%s: fileDeleted(%s)", projectName(), event.getFile().getPath());
                         removeEmbeddings(event.getFile());
                         dirty = true;
                     } else if (event instanceof VFileCreateEvent) {
-                        debug("%s: fileCreated(%s)", projectName, event.getFile().getPath());
-                        updateEmbeddings(event.getFile());
+                        debug("%s: fileCreated(%s)", projectName(), event.getFile().getPath());
+                        createEmbeddings(event.getFile());
                         dirty = true;
                     }
                     db.commit();
@@ -226,9 +306,18 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
         };
     }
 
+    private static boolean shouldIndex(@Nullable VirtualFile file) {
+        return file.getPath().endsWith(".java");
+    }
+
+    @NotNull
+    private String projectName() {
+        return project.getName();
+    }
+
     @Override
     public void close() {
-        debug("%s: close()", projectName);
+        debug("%s: close()", projectName());
         save();
         db.close();
         scheduler.shutdown();
