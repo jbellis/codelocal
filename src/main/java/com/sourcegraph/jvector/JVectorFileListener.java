@@ -24,7 +24,6 @@ import org.mapdb.Serializer;
 
 import java.io.DataOutput;
 import java.io.DataOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -35,6 +34,10 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+/**
+ * An asynchronous file listener that reacts to file changes within a project, maintaining and updating an
+ * index of file embeddings and a map of embeddings to source file.
+ */
 public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
     private static final Logger log = Logger.getInstance(JVectorFileListener.class);
 
@@ -89,6 +92,9 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
         scheduler.schedule(this::save, 1, java.util.concurrent.TimeUnit.MINUTES);
     }
 
+    /**
+     * Log a debug message with String.format parameters.
+     */
     private static void debug(String format, Object... args) {
         var message = String.format(format, args);
         log.warn(message);
@@ -142,6 +148,7 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
     private void updateEmbeddings(@NotNull VirtualFile file) {
         var chunks = computeEmbeddings(file);
         var ordinals = new int[chunks.size()];
+        // add each chunk to the index
         for (int i = 0; i < chunks.size(); i++) {
             var chunk = chunks.get(i);
             int ordinal = vectors.size();
@@ -150,6 +157,7 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
             chunksByOrdinal.put(ordinal, chunk.body);
             ordinals[i] = ordinal;
         }
+        // update the ordinalsByFile map
         ordinalsByFile.put(file.getPath(), ordinals);
     }
 
@@ -164,6 +172,9 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
         }
     }
 
+    /**
+     * Turn a list of VFileEvents into a ChangeApplier that updates the graph index and ordinalsByFile map.
+     */
     @Override
     public ChangeApplier prepareChange(@NotNull List<? extends @NotNull VFileEvent> list) {
         return new ChangeApplier() {
