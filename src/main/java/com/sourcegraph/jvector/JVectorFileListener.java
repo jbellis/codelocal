@@ -1,5 +1,6 @@
 package com.sourcegraph.jvector;
 
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -13,6 +14,12 @@ import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
 import com.intellij.openapi.vfs.newvfs.events.VFileMoveEvent;
+import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiCodeBlock;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiJavaFile;
+import com.intellij.psi.PsiManager;
+import com.intellij.psi.PsiMethod;
 import io.github.jbellis.jvector.disk.SimpleMappedReader;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
@@ -31,11 +38,15 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -127,6 +138,7 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
                 }
             });
         }
+        save();
         debug("%s: scanExistingFiles: visited=%d, updated=%d", projectName(), visited.get(), updated.get());
     }
 
@@ -208,20 +220,59 @@ public class JVectorFileListener implements AsyncFileListener, AutoCloseable {
 
     private @NotNull List<Chunk> computeEmbeddings(VirtualFile file) {
         var chunks = new ArrayList<Chunk>();
-        try {
-            var text = new String(file.contentsToByteArray(), file.getCharset());
-            for (var body: chunkify(text)) {
-                var embedding = embeddingsProvider.getEmbedding(body);
-                chunks.add(new Chunk(body, embedding));
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+        for (var body: chunkify(file)) {
+            var embedding = embeddingsProvider.getEmbedding(body);
+            chunks.add(new Chunk(body, embedding));
         }
         return chunks;
     }
 
-    private List<String> chunkify(String text) {
-        return List.of("TODO");
+    /**
+     * Extracts all method bodies from a given Java file.
+     *
+     * @param file The virtual file to process, expected to be a Java file.
+     * @return A list of strings, each representing the body of a method.
+     */
+    private Set<String> chunkify(@NotNull VirtualFile file) {
+        var chunks = ConcurrentHashMap.<String>newKeySet();
+        ApplicationManager.getApplication().runReadAction(() -> {
+            PsiFile pf = PsiManager.getInstance(project).findFile(file);
+            assert pf instanceof PsiJavaFile : pf;
+            PsiJavaFile javaFile = (PsiJavaFile) pf;
+            for (var psiClass : javaFile.getClasses()) {
+                for (var method : psiClass.getMethods()) {
+                    var methodBody = method.getBody();
+                    if (methodBody == null) {
+                        // interface or abstract method
+                        continue;
+                    }
+                    String methodText = methodBody.getText();
+                    chunks.addAll(chunkMethod(methodText));
+                }
+            }
+        });
+
+        // write the chunks to a file for debugging
+        Path path = Paths.get("/tmp").resolve(file.getName() + ".chunks");
+        try {
+            Files.write(path, chunks);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        return chunks;
+    }
+
+    private List<String> chunkMethod(String methodText) {
+        // TODO refine the estimate of token count by actually looking at some examples
+        // the generic guideline of 1 token per 4 English characters will probably undercount for code
+        // so we use 1:1 which may well be too conservative
+        var chunkLength = 8192;
+        var chunks = new ArrayList<String>();
+        for (int i = 0; i < methodText.length(); i += chunkLength) {
+            chunks.add(methodText.substring(i, Math.min(i + chunkLength, methodText.length())));
+        }
+        return chunks;
     }
 
     private void createEmbeddings(@NotNull VirtualFile file) {

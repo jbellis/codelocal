@@ -19,6 +19,7 @@ public class JVectorFileListenerReference implements Disposable {
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Initializing JVector", true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
+                indicator.setIndeterminate(true); // TODO refactor so we can give actual progress
                 listener = new JVectorFileListener(project);
                 // TODO not sure if this is an appropriate Disposable
                 VirtualFileManager.getInstance().addAsyncFileListener(listener, JVectorFileListenerReference.this);
